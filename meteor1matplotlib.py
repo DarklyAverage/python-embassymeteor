@@ -2,7 +2,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-
 #menu text in console, maybe ill change it later
 #i might remove drifting idk it seems like worse than the other one
 
@@ -22,6 +21,18 @@ mode_choice = input("Enter 1 or 2: ").strip()
 #Point score S tier whatever maybe boosts and power ups if you do good
 #oh yeah also catch up mechanics/rubberbanding if they do bad
 # make stars different colors maybe and add some more effects
+#actually will colors even look better or not  
+#does it look better with grid or nah idk
+#screenshake when a large asteroid explodes or when your ship takes damage.
+#freeze frames spam Pausing the game for a fraction of a second (e.g., 50 milliseconds) right when a bullet strikes an asteroid to emphasize the impact.
+#particle effect swhen you shoot or destroy asteroid or  other stuff like raising score etc
+#recoil when you shoot
+#sound effects and music
+#remember to have a bunch of different laser shots sfx so the sound doesn't become repetitive, and explosion sfx
+#make stuff flash  white for one frame before it breaks apart, or add a glowing bloom effect to neon vector lines
+# actually make the game lol by spawning bullets, moving asteroids at random angles, and programming the logic to split large asteroids into medium and small pieces upon impact
+#detect hits between bullets, asteroids, and the player ship, plus adding lives, respawning with brief invulnerability, and game-over states
+#add  vector-style particle explosions, sound effects, a scoring system, and maybe? other types of enemies
 
 #hold on these star effects are sick i might have to make an exploration or something game
 #where instead of teleporting from one side to the other when you cross
@@ -29,7 +40,7 @@ mode_choice = input("Enter 1 or 2: ").strip()
 
 width,height = 100,100
 rotatespeed = 10
-accel = 0.25
+accel = 0.3
 drag = 0.92
 laserspeed = 4.0
 maxprojectiles = 5
@@ -49,18 +60,29 @@ thruster_shape = np.array([[0, -0.5], [-0.7, -1.5], [0, -3.0], [0.7, -1.5], [0, 
 # i mean maybe not the shape more like
 #the way that it appears and disappears
 
-num_stars = 40
+num_stars = 75
 stars_x = np.random.uniform(0, width, num_stars)
+stars_y = np.random.uniform(1, height-1, num_stars)
 
+star_depth = np.random.power(0.6, num_stars)
 if mode_choice == "2":
-    stars_y = np.random.uniform(1, height-1, num_stars)
-    star_speeds = np.random.uniform(0.5, 1.5, num_stars)
+    star_speeds = 0.3 + star_depth * 1.2
 else:
-    stars_y = np.random.uniform(1, height-1, num_stars)
-    star_speeds = np.random.uniform(0.1, 0.4, num_stars)
+    star_speeds = 0.08 + star_depth * 0.35
 
-fig, ax = plt.subplots(figsize=(6, 6), facecolor='black')
-ax.set_facecolor('black')
+star_sizes = 1.0 + star_depth * 6.0
+star_base_alphas = 0.25 + star_depth * 0.7
+
+star_colors = np.random.choice(
+    ['#FFFFFF', '#DCE8FF', '#FFF3D6', '#E3D4FF'], 
+    size=num_stars, 
+    p=[0.55, 0.2, 0.15, 0.1]
+)
+
+twinkle_offsets = np.random.uniform(0, 2 * np.pi, num_stars)
+
+fig, ax = plt.subplots(figsize=(6, 6), facecolor='#050510')
+ax.set_facecolor('#050510')
 ax.set_xlim(0, width)
 ax.set_ylim(0, height)
 
@@ -78,7 +100,8 @@ for spine in ax.spines.values():
     spine.set_color('#444466')
     spine.set_linewidth(2)
 
-stars_plot = ax.scatter(stars_x, stars_y, c='white', s=np.random.uniform(1, 4, num_stars), alpha=0.6, clip_on=True)
+stars_glow = ax.scatter(stars_x, stars_y, c=star_colors, s=star_sizes * 4.5, alpha=star_base_alphas * 0.2, edgecolors='none', clip_on=True)
+stars_plot = ax.scatter(stars_x, stars_y, c=star_colors, s=star_sizes, alpha=star_base_alphas, edgecolors='none', clip_on=True)
 thruster_plot, = ax.plot([], [], color='magenta', lw=1.5, alpha=0.8, clip_on=True)
 ship_plot, = ax.plot([], [], color='cyan', lw=2, clip_on=True)
 
@@ -118,17 +141,24 @@ def update_game(frame):
     if mode_choice == "2":
         stars_x -= ship[2] * star_speeds
         stars_y -= ship[3] * star_speeds
-        
         stars_x %= width
         stars_y %= height
-        stars_plot.set_offsets(np.c_[stars_x, stars_y])
     else:
         stars_y -= star_speeds
         stars_y %= height
-        stars_plot.set_offsets(np.c_[stars_x, stars_y])
+
+    offsets = np.c_[stars_x, stars_y]
+    stars_glow.set_offsets(offsets)
+    stars_plot.set_offsets(offsets)
+
+    twinkle = np.clip(star_base_alphas + 0.15 * np.sin(frame * 0.15 + twinkle_offsets), 0.1, 1.0)
+    stars_plot.set_alpha(twinkle)
+    stars_glow.set_alpha(twinkle * 0.2)
 
     rad = np.radians(ship[4] - 90)
+
     c, s = np.cos(rad), np.sin(rad)
+
     rot_matrix = np.array([[c, -s], [s, c]])
 
     if 'up' in keys_pressed:
@@ -142,20 +172,20 @@ def update_game(frame):
         thruster_plot.set_visible(False)
 
     transformed_shape = ship_shape @ rot_matrix.T
+
     ship_plot.set_data(transformed_shape[:, 0] + ship[0], transformed_shape[:, 1] + ship[1])
-    return [stars_plot, thruster_plot, ship_plot]
+    return [stars_glow, stars_plot, thruster_plot, ship_plot]
 
 def init_game():
+    stars_glow.set_offsets(np.empty((0, 2)))
+
     stars_plot.set_offsets(np.empty((0, 2)))
     thruster_plot.set_data([], [])
     ship_plot.set_data([], [])
-    return [stars_plot, thruster_plot, ship_plot]
+
+    return [stars_glow, stars_plot, thruster_plot, ship_plot]
 
 ani = animation.FuncAnimation(fig, update_game, init_func=init_game, interval=33, blit=True, cache_frame_data=False)
 
-print("Press Arrow Keys to Fly")
-
-# i gotta change this message at some point
-
+print("Game opened in new window.")
 plt.show()
-
